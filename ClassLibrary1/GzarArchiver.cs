@@ -6,8 +6,12 @@ using System.Windows.Forms;
 
 public class GzarArchiver
 {
+    private const string ArchiveDirectory = "E:\\Унік\\1 Курс\\Лаби ООП\\lab_13\\archives\\";
     private const string TempFileName = "fileinfo.txt";
-    private static string tempFilePath = Path.Combine(Path.GetTempPath(), TempFileName);
+    private const string ArchiveExtension = ".gzar";
+    private const string CryptExtension = ".crypt";
+    private const string TempExtension = ".temp";
+    private static readonly string TempFilePath = Path.Combine(Path.GetTempPath(), TempFileName);
 
     public static void CreateArchive(ListBox listBox)
     {
@@ -33,12 +37,12 @@ public class GzarArchiver
 
         foreach (string file in listBox.Items)
         {
-            if (file.EndsWith(".gzar")) continue;
+            if (file.EndsWith(ArchiveExtension)) continue;
 
-            if (file.Contains(".crypt"))
+            if (file.Contains(CryptExtension))
             {
                 files.Add(file);
-                files.Add(file.Replace(".crypt", ".temp"));
+                files.Add(file.Replace(CryptExtension, TempExtension));
                 continue;
             }
 
@@ -50,7 +54,7 @@ public class GzarArchiver
 
     private static void WriteFileListToTemp(List<string> files)
     {
-        using (StreamWriter writer = new StreamWriter(tempFilePath))
+        using (StreamWriter writer = new StreamWriter(TempFilePath))
         {
             foreach (string file in files)
             {
@@ -61,8 +65,7 @@ public class GzarArchiver
 
     private static string GetArchivePath(string firstFile)
     {
-        string archiveDir = "E:\\Унік\\1 Курс\\Лаби ООП\\lab_13\\archives\\";
-        return Path.Combine(archiveDir, Path.GetFileNameWithoutExtension(firstFile) + ".zip");
+        return Path.Combine(ArchiveDirectory, Path.GetFileNameWithoutExtension(firstFile) + ".zip");
     }
 
     private static void CreateZipArchive(List<string> files, string zipFilePath)
@@ -70,7 +73,7 @@ public class GzarArchiver
         using (FileStream archiveStream = new FileStream(zipFilePath, FileMode.Create))
         using (ZipArchive archive = new ZipArchive(archiveStream, ZipArchiveMode.Create))
         {
-            archive.CreateEntryFromFile(tempFilePath, TempFileName);
+            archive.CreateEntryFromFile(TempFilePath, TempFileName);
 
             foreach (string file in files)
             {
@@ -82,9 +85,9 @@ public class GzarArchiver
 
     private static void FinalizeArchive(string zipFilePath, List<string> files, ListBox listBox)
     {
-        string finalArchivePath = Path.ChangeExtension(zipFilePath, ".gzar");
+        string finalArchivePath = Path.ChangeExtension(zipFilePath, ArchiveExtension);
         File.Move(zipFilePath, finalArchivePath);
-        File.Delete(tempFilePath);
+        File.Delete(TempFilePath);
 
         foreach (string file in files)
         {
@@ -102,7 +105,7 @@ public class GzarArchiver
 
         foreach (string archivePath in listBox.Items)
         {
-            if (!archivePath.EndsWith(".gzar"))
+            if (!archivePath.EndsWith(ArchiveExtension))
             {
                 oldFiles.Add(archivePath);
                 continue;
@@ -126,7 +129,7 @@ public class GzarArchiver
                 throw new FileNotFoundException($"Metadata file {TempFileName} not found in archive.");
             }
 
-            tempEntry.ExtractToFile(tempFilePath, true);
+            tempEntry.ExtractToFile(TempFilePath, true);
 
             List<string> fileMappings = ReadFileMappings();
 
@@ -138,18 +141,18 @@ public class GzarArchiver
                 if (fileEntry != null)
                 {
                     fileEntry.ExtractToFile(filePath, true);
-                    if (!filePath.EndsWith(".temp"))
+                    if (!filePath.EndsWith(TempExtension))
                         newFiles.Add(filePath);
                 }
             }
         }
-        File.Delete(tempFilePath);
+        File.Delete(TempFilePath);
     }
 
     private static List<string> ReadFileMappings()
     {
         List<string> fileMappings = new List<string>();
-        using (StreamReader reader = new StreamReader(tempFilePath))
+        using (StreamReader reader = new StreamReader(TempFilePath))
         {
             string line;
             while ((line = reader.ReadLine()) != null)
