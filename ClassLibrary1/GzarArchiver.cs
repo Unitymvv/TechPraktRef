@@ -15,20 +15,27 @@ public class GzarArchiver
 
     public static void CreateArchive(ListBox listBox)
     {
-        List<string> files = FilterFilesForArchive(listBox);
-
-        if (files.Count == 0)
+        try
         {
-            return;
+            List<string> files = FilterFilesForArchive(listBox);
+
+            if (files.Count == 0)
+            {
+                return;
+            }
+
+            WriteFileListToTemp(files);
+
+            string zipFilePath = GetArchivePath(files[0]);
+
+            CreateZipArchive(files, zipFilePath);
+
+            FinalizeArchive(zipFilePath, files, listBox);
         }
-
-        WriteFileListToTemp(files);
-
-        string zipFilePath = GetArchivePath(files[0]);
-
-        CreateZipArchive(files, zipFilePath);
-
-        FinalizeArchive(zipFilePath, files, listBox);
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error during archive creation: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private static List<string> FilterFilesForArchive(ListBox listBox)
@@ -54,12 +61,19 @@ public class GzarArchiver
 
     private static void WriteFileListToTemp(List<string> files)
     {
-        using (StreamWriter writer = new StreamWriter(TempFilePath))
+        try
         {
-            foreach (string file in files)
+            using (StreamWriter writer = new StreamWriter(TempFilePath))
             {
-                writer.WriteLine(file);
+                foreach (string file in files)
+                {
+                    writer.WriteLine(file);
+                }
             }
+        }
+        catch (IOException ex)
+        {
+            throw new InvalidOperationException("Error writing file list to temporary file", ex);
         }
     }
 
@@ -70,32 +84,46 @@ public class GzarArchiver
 
     private static void CreateZipArchive(List<string> files, string zipFilePath)
     {
-        using (FileStream archiveStream = new FileStream(zipFilePath, FileMode.Create))
-        using (ZipArchive archive = new ZipArchive(archiveStream, ZipArchiveMode.Create))
+        try
         {
-            archive.CreateEntryFromFile(TempFilePath, TempFileName);
-
-            foreach (string file in files)
+            using (FileStream archiveStream = new FileStream(zipFilePath, FileMode.Create))
+            using (ZipArchive archive = new ZipArchive(archiveStream, ZipArchiveMode.Create))
             {
-                string entryName = Path.GetFileName(file);
-                archive.CreateEntryFromFile(file, entryName);
+                archive.CreateEntryFromFile(TempFilePath, TempFileName);
+
+                foreach (string file in files)
+                {
+                    string entryName = Path.GetFileName(file);
+                    archive.CreateEntryFromFile(file, entryName);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Error creating zip archive", ex);
         }
     }
 
     private static void FinalizeArchive(string zipFilePath, List<string> files, ListBox listBox)
     {
-        string finalArchivePath = Path.ChangeExtension(zipFilePath, ArchiveExtension);
-        File.Move(zipFilePath, finalArchivePath);
-        File.Delete(TempFilePath);
-
-        foreach (string file in files)
+        try
         {
-            File.Delete(file);
-        }
+            string finalArchivePath = Path.ChangeExtension(zipFilePath, ArchiveExtension);
+            File.Move(zipFilePath, finalArchivePath);
+            File.Delete(TempFilePath);
 
-        listBox.Items.Clear();
-        listBox.Items.Add(finalArchivePath);
+            foreach (string file in files)
+            {
+                File.Delete(file);
+            }
+
+            listBox.Items.Clear();
+            listBox.Items.Add(finalArchivePath);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show($"Error finalizing archive: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     public static void ExtractArchive(ListBox listBox)
@@ -120,33 +148,43 @@ public class GzarArchiver
 
     private static void ExtractFilesFromArchive(string archivePath, List<string> newFiles)
     {
-        using (FileStream archiveStream = new FileStream(archivePath, FileMode.Open))
-        using (ZipArchive archive = new ZipArchive(archiveStream, ZipArchiveMode.Read))
+        try
         {
-            var tempEntry = archive.GetEntry(TempFileName);
-            if (tempEntry == null)
+            using (FileStream archiveStream = new FileStream(archivePath, FileMode.Open))
+            using (ZipArchive archive = new ZipArchive(archiveStream, ZipArchiveMode.Read))
             {
-                throw new FileNotFoundException($"Metadata file {TempFileName} not found in archive.");
-            }
-
-            tempEntry.ExtractToFile(TempFilePath, true);
-
-            List<string> fileMappings = ReadFileMappings();
-
-            foreach (string filePath in fileMappings)
-            {
-                string fileName = Path.GetFileName(filePath);
-                var fileEntry = archive.GetEntry(fileName);
-
-                if (fileEntry != null)
+                var tempEntry = archive.GetEntry(TempFileName);
+                if (tempEntry == null)
                 {
-                    fileEntry.ExtractToFile(filePath, true);
-                    if (!filePath.EndsWith(TempExtension))
-                        newFiles.Add(filePath);
+                    throw new FileNotFoundException($"Metadata file {TempFileName} not found in archive.");
+                }
+
+                tempEntry.ExtractToFile(TempFilePath, true);
+
+                List<string> fileMappings = ReadFileMappings();
+
+                foreach (string filePath in fileMappings)
+                {
+                    string fileName = Path.GetFileName(filePath);
+                    var fileEntry = archive.GetEntry(fileName);
+
+                    if (fileEntry != null)
+                    {
+                        fileEntry.ExtractToFile(filePath, true);
+                        if (!filePath.EndsWith(TempExtension))
+                            newFiles.Add(filePath);
+                    }
                 }
             }
         }
-        File.Delete(TempFilePath);
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error extracting archive: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            File.Delete(TempFilePath);
+        }
     }
 
     private static List<string> ReadFileMappings()
